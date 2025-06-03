@@ -40,7 +40,6 @@ class HeyGenClient:
         """Generate a session token from API key."""
         logger.info("Generating session token")
         
-        # FIXED: Correct endpoint for creating tokens
         response = await self._client.post(
             f"{self.base_url}/streaming.create_token",
             headers={"x-api-key": self.api_key}
@@ -48,7 +47,14 @@ class HeyGenClient:
         response.raise_for_status()
         
         data = response.json()
-        self.session_token = data["token"]
+        
+        # FIXED: Correct response structure - token is nested in data
+        if "data" in data and "token" in data["data"]:
+            self.session_token = data["data"]["token"]
+        else:
+            # Fallback: log the actual response structure for debugging
+            logger.error("Unexpected token response structure", response_data=data)
+            raise HeyGenAPIError(f"Token not found in response: {data}")
         
         logger.info("Session token generated successfully")
         metrics.increment("session_tokens_generated")
@@ -75,7 +81,6 @@ class HeyGenClient:
             "version": "v2"
         }
         
-        # FIXED: Use the correct endpoint for creating sessions
         response = await self._client.post(
             f"{self.base_url}/streaming.new",
             json=payload,
@@ -90,12 +95,18 @@ class HeyGenClient:
         response.raise_for_status()
         data = response.json()
         
-        self.session_id = data["session_id"]
+        # Handle nested response structure if needed
+        if "data" in data:
+            session_data = data["data"]
+        else:
+            session_data = data
+        
+        self.session_id = session_data["session_id"]
         
         logger.info("Streaming session created", session_id=self.session_id)
         metrics.increment("sessions_created")
         
-        return data
+        return session_data
     
     @handle_api_errors
     async def start_session(self) -> Dict[str, Any]:
@@ -105,7 +116,6 @@ class HeyGenClient:
         
         logger.info("Starting streaming session", session_id=self.session_id)
         
-        # FIXED: Use the correct endpoint for starting sessions
         response = await self._client.post(
             f"{self.base_url}/streaming.start",
             json={"session_id": self.session_id},
@@ -114,12 +124,19 @@ class HeyGenClient:
         response.raise_for_status()
         
         data = response.json()
+        
+        # Handle nested response structure if needed
+        if "data" in data:
+            start_data = data["data"]
+        else:
+            start_data = data
+            
         self.session_active = True
         
         logger.info("Streaming session started successfully")
         metrics.increment("sessions_started")
         
-        return data
+        return start_data
     
     @handle_api_errors
     async def send_task(self, text: str, task_type: str = "talk") -> bool:
@@ -156,7 +173,6 @@ class HeyGenClient:
         logger.info("Stopping streaming session", session_id=self.session_id)
         
         try:
-            # FIXED: Use the correct endpoint for stopping sessions
             response = await self._client.post(
                 f"{self.base_url}/streaming.stop",
                 json={"session_id": self.session_id},
