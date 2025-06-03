@@ -48,7 +48,7 @@ class HeyGenClient:
         
         data = response.json()
         
-        # FIXED: Correct response structure - token is nested in data
+        # Correct response structure - token is nested in data
         if "data" in data and "token" in data["data"]:
             self.session_token = data["data"]["token"]
         else:
@@ -69,17 +69,21 @@ class HeyGenClient:
         if not self.session_token:
             await self.generate_session_token()
         
+        # FIXED: Updated payload structure based on HeyGen API docs
         payload = {
+            "version": "v2",
+            "avatar_id": settings.avatar_id,  # Changed from avatar_name
             "quality": quality,
-            "avatar_name": settings.avatar_id,
             "voice": {
                 "voice_id": "claire",
                 "rate": settings.speaking_rate,
                 "emotion": settings.voice_emotion
             },
-            "knowledge_base_id": settings.knowledge_base_id,
-            "version": "v2"
+            "knowledge_id": settings.knowledge_base_id  # Changed from knowledge_base_id
         }
+        
+        # Log the payload for debugging
+        logger.info("Session payload", payload=payload)
         
         response = await self._client.post(
             f"{self.base_url}/streaming.new",
@@ -87,10 +91,22 @@ class HeyGenClient:
             headers={"Authorization": f"Bearer {self.session_token}"}
         )
         
+        # Better error handling for 400 responses
         if response.status_code == 400:
-            error_data = response.json()
-            if "concurrent session limit" in str(error_data).lower():
-                raise SessionLimitError("Concurrent session limit reached", 400, error_data)
+            try:
+                error_data = response.json()
+                logger.error("Session creation failed", status_code=400, error_data=error_data)
+                
+                if "concurrent session limit" in str(error_data).lower():
+                    raise SessionLimitError("Concurrent session limit reached", 400, error_data)
+                else:
+                    raise HeyGenAPIError(f"Bad request: {error_data}", 400, error_data)
+            except Exception as e:
+                # If we can't parse the error response
+                error_text = response.text
+                logger.error("Session creation failed with unparseable response", 
+                           status_code=400, response_text=error_text)
+                raise HeyGenAPIError(f"Bad request: {error_text}", 400)
         
         response.raise_for_status()
         data = response.json()
