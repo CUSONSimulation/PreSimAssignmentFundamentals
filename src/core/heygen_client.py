@@ -40,8 +40,9 @@ class HeyGenClient:
         """Generate a session token from API key."""
         logger.info("Generating session token")
         
+        # FIXED: Correct endpoint for creating tokens
         response = await self._client.post(
-            f"{self.base_url}/streaming.session_token",
+            f"{self.base_url}/streaming.create_token",
             headers={"x-api-key": self.api_key}
         )
         response.raise_for_status()
@@ -74,8 +75,9 @@ class HeyGenClient:
             "version": "v2"
         }
         
+        # FIXED: Use the correct endpoint for creating sessions
         response = await self._client.post(
-            f"{self.base_url}/streaming.create_session",
+            f"{self.base_url}/streaming.new",
             json=payload,
             headers={"Authorization": f"Bearer {self.session_token}"}
         )
@@ -103,8 +105,9 @@ class HeyGenClient:
         
         logger.info("Starting streaming session", session_id=self.session_id)
         
+        # FIXED: Use the correct endpoint for starting sessions
         response = await self._client.post(
-            f"{self.base_url}/streaming.start_session",
+            f"{self.base_url}/streaming.start",
             json={"session_id": self.session_id},
             headers={"Authorization": f"Bearer {self.session_token}"}
         )
@@ -153,8 +156,9 @@ class HeyGenClient:
         logger.info("Stopping streaming session", session_id=self.session_id)
         
         try:
+            # FIXED: Use the correct endpoint for stopping sessions
             response = await self._client.post(
-                f"{self.base_url}/streaming.stop_session",
+                f"{self.base_url}/streaming.stop",
                 json={"session_id": self.session_id},
                 headers={"Authorization": f"Bearer {self.session_token}"}
             )
