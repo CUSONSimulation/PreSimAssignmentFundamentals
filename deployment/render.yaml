@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: heygen-avatar-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run src/app.py --server.port=$PORT --server.address=0.0.0.0
+    envVars:
+      - key: HEYGEN_API_KEY
+        sync: false
+      - key: KNOWLEDGE_BASE_ID
+        value: 6bbcea1ca7ab4640a7802da4d1492e62
+      - key: AVATAR_ID
+        value: Rika_Chair_Sitting_public
+      - key: LOG_LEVEL
+        value: INFO
+      - key: SESSION_TIMEOUT
+        value: 120
+      - key: MAX_CONCURRENT_SESSIONS
+        value: 3
+
+  - type: redis
+    name: heygen-avatar-redis
+    ipAllowList: []
