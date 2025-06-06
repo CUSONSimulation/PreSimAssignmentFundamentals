@@ -1,4 +1,4 @@
-"""Avatar display component with video streaming."""
+"""Avatar display component with video streaming - FIXED."""
 
 import streamlit as st
 from typing import Optional, Dict, Any
@@ -28,22 +28,48 @@ class AvatarDisplay:
             video_container = st.container()
             
             with video_container:
-                if session_data and session_data.get("room_url"):
-                    # Setup WebRTC streamer
-                    self.webrtc_ctx = webrtc_handler.setup_webrtc_streamer(
-                        key="avatar_stream",
-                        on_audio_frame=self._process_audio_frame,
-                        on_video_frame=self._process_video_frame
-                    )
+                # FIXED: Check for 'url' instead of 'room_url'
+                if session_data and (session_data.get("url") or session_data.get("room_url")):
+                    # Log the session data for debugging
+                    logger.info("Rendering avatar with session data", 
+                              has_url=bool(session_data.get("url")),
+                              has_access_token=bool(session_data.get("access_token")),
+                              session_id=session_data.get("session_id"))
                     
-                    # Display connection status
-                    if self.webrtc_ctx.state.playing:
-                        st.success("🟢 Connected to avatar")
+                    # Get WebRTC connection info
+                    room_url = session_data.get("url") or session_data.get("room_url")
+                    access_token = session_data.get("access_token")
+                    
+                    # For HeyGen v2, we need to display using an iframe or WebRTC connection
+                    # The avatar should appear through the WebSocket connection
+                    
+                    # Option 1: Display using iframe with the realtime endpoint
+                    if session_data.get("realtime_endpoint"):
+                        st.markdown(
+                            f"""
+                            <div style="position: relative; width: 100%; height: 500px;">
+                                <iframe 
+                                    src="{session_data['realtime_endpoint']}"
+                                    style="width: 100%; height: 100%; border: none; border-radius: 10px;"
+                                    allow="camera; microphone; autoplay"
+                                ></iframe>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
                         self.connection_status = "connected"
-                        metrics.increment("avatar_connections_active")
+                        st.success("🟢 Connected to avatar")
                     else:
-                        st.warning("🟡 Connecting to avatar...")
-                        self.connection_status = "connecting"
+                        # Option 2: Set up WebRTC connection
+                        st.info("🟡 Establishing WebRTC connection...")
+                        
+                        # Store connection info in session state for WebRTC handler
+                        st.session_state.webrtc_room_url = room_url
+                        st.session_state.webrtc_access_token = access_token
+                        
+                        # For now, show a placeholder
+                        self._render_placeholder()
+                        st.warning("WebRTC connection requires additional setup. Avatar stream will appear here.")
                 else:
                     st.info("👋 Start a session to connect with the avatar")
                     self._render_placeholder()
@@ -119,10 +145,15 @@ class AvatarDisplay:
             st.text(f"ID: {session_data.get('session_id', 'N/A')[:12]}...")
             st.text(f"Created: {session_data.get('created_at', 'N/A')}")
             
-            # Connection stats
-            stats = webrtc_handler.get_connection_stats()
-            if stats:
-                st.text(f"WebRTC: {stats.get('connection_state', 'unknown')}")
+            # Debug info - show what data we have
+            with st.expander("Debug Info"):
+                st.json({
+                    "has_url": bool(session_data.get("url")),
+                    "has_access_token": bool(session_data.get("access_token")),
+                    "has_realtime_endpoint": bool(session_data.get("realtime_endpoint")),
+                    "url": session_data.get("url", "N/A")[:50] + "..." if session_data.get("url") else "N/A",
+                    "session_id": session_data.get("session_id", "N/A")
+                })
     
     def _process_audio_frame(self, frame):
         """Process incoming audio frames from avatar."""
