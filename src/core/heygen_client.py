@@ -1,4 +1,4 @@
-"""HeyGen API client with authentication and session management."""
+"""HeyGen API client with authentication and session management - FIXED."""
 
 import asyncio
 import time
@@ -69,18 +69,34 @@ class HeyGenClient:
         if not self.session_token:
             await self.generate_session_token()
         
-        # FIXED: Updated payload structure based on HeyGen API docs
+        # FIXED: Use valid HeyGen voice ID
+        # Common HeyGen voice IDs include:
+        # - "Kristin - Natural" 
+        # - "Paul - Natural"
+        # - "Monica - Friendly"
+        # - Or use the avatar's default voice by not specifying voice_id
+        
         payload = {
             "version": "v2",
-            "avatar_id": settings.avatar_id,  # Changed from avatar_name
+            "avatar_id": settings.avatar_id,
             "quality": quality,
             "voice": {
-                "voice_id": "claire",
-                "rate": settings.speaking_rate,
-                "emotion": settings.voice_emotion
-            },
-            "knowledge_id": settings.knowledge_base_id  # Changed from knowledge_base_id
+                "voice_id": settings.voice_id if hasattr(settings, 'voice_id') else None,
+                # If no voice_id specified, HeyGen will use the avatar's default voice
+            }
         }
+        
+        # Only add voice settings if we have a valid voice_id
+        if payload["voice"]["voice_id"]:
+            payload["voice"]["rate"] = settings.speaking_rate
+            payload["voice"]["emotion"] = settings.voice_emotion
+        else:
+            # Remove voice field entirely to use avatar's default voice
+            payload.pop("voice", None)
+            
+        # Add knowledge base if specified
+        if hasattr(settings, 'knowledge_base_id') and settings.knowledge_base_id:
+            payload["knowledge_id"] = settings.knowledge_base_id
         
         # Log the payload for debugging
         logger.info("Session payload", payload=payload)
@@ -97,7 +113,14 @@ class HeyGenClient:
                 error_data = response.json()
                 logger.error("Session creation failed", status_code=400, error_data=error_data)
                 
-                if "concurrent session limit" in str(error_data).lower():
+                # Provide helpful error messages
+                if "voice_not_found" in str(error_data).lower():
+                    raise HeyGenAPIError(
+                        "Voice ID not found. Please check your voice_id in settings or remove it to use the avatar's default voice.", 
+                        400, 
+                        error_data
+                    )
+                elif "concurrent session limit" in str(error_data).lower():
                     raise SessionLimitError("Concurrent session limit reached", 400, error_data)
                 else:
                     raise HeyGenAPIError(f"Bad request: {error_data}", 400, error_data)
