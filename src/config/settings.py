@@ -1,4 +1,4 @@
-"""Configuration management for HeyGen Streamlit Avatar application."""
+"""Configuration management for HeyGen Streamlit Avatar application - FIXED."""
 
 import os
 from typing import List, Optional
@@ -13,8 +13,16 @@ class Settings(BaseSettings):
     
     # HeyGen API Configuration
     heygen_api_key: str = Field(..., env="HEYGEN_API_KEY")
-    knowledge_base_id: str = Field("6bbcea1ca7ab4640a7802da4d1492e62", env="KNOWLEDGE_BASE_ID")
+    knowledge_base_id: Optional[str] = Field(None, env="KNOWLEDGE_BASE_ID")
     avatar_id: str = Field("Rika_Chair_Sitting_public", env="AVATAR_ID")
+    
+    # FIXED: Voice Configuration
+    # Common HeyGen voice IDs:
+    # - Leave empty/None to use avatar's default voice (RECOMMENDED)
+    # - "1bd001e7e50f421d891986aad5158bc8" (Monica - Friendly)
+    # - "002e255ffe5b4f1590c2471d3a84fc23" (Paul - Natural)
+    # - Check HeyGen dashboard for available voice IDs
+    voice_id: Optional[str] = Field(None, env="VOICE_ID")
     
     # API Endpoints
     heygen_base_url: str = "https://api.heygen.com/v1"
