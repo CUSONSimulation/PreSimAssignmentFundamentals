@@ -1,4 +1,4 @@
-"""Main Streamlit application for HeyGen Interactive Avatar."""
+"""Main Streamlit application for HeyGen Interactive Avatar - FIXED."""
 
 import asyncio
 import datetime
@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Import components after page config - FIXED IMPORTS
+# Import components after page config
 from config.settings import settings
 from core.heygen_client import HeyGenClient
 from core.session_manager import session_manager
@@ -73,13 +73,20 @@ class AvatarApp:
                 
                 start_data = await self.heygen_client.start_session()
                 
+                # FIXED: Handle potential None values
                 # Store session data
                 session_info = {
-                    **session_data,
-                    **start_data,
                     "created_at": datetime.datetime.now().isoformat(),
                     "quality": st.session_state.get("avatar_quality", "high")
                 }
+                
+                # Safely merge session_data if it exists
+                if session_data:
+                    session_info.update(session_data)
+                
+                # Safely merge start_data if it exists
+                if start_data:
+                    session_info.update(start_data)
                 
                 # Create session in session manager
                 self.current_session_id = await session_manager.create_session(
@@ -105,7 +112,7 @@ class AvatarApp:
             
         except Exception as e:
             st.error(f"Unexpected error: {str(e)}")
-            logger.error("Unexpected error starting session", error=str(e))
+            logger.error("Unexpected error starting session", error=str(e), exc_info=True)
         
         return False
     
@@ -186,11 +193,17 @@ class AvatarApp:
             
             if not st.session_state.session_active:
                 if st.button("🚀 Start Avatar Session", type="primary", use_container_width=True):
-                    asyncio.run(self.start_avatar_session())
-                    st.rerun()
+                    # Use asyncio properly for Streamlit
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    success = loop.run_until_complete(self.start_avatar_session())
+                    if success:
+                        st.rerun()
             else:
                 if st.button("⏹️ Stop Session", type="secondary", use_container_width=True):
-                    asyncio.run(self.stop_avatar_session())
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(self.stop_avatar_session())
                     st.rerun()
             
             st.divider()
@@ -236,12 +249,13 @@ class AvatarApp:
             
             # Debug info
             with st.expander("🔍 Debug Info"):
-                st.json({
+                debug_info = {
                     "session_active": st.session_state.session_active,
                     "user_id": st.session_state.user_id,
-                    "session_data_keys": list(st.session_state.session_data.keys()),
+                    "session_data_keys": list(st.session_state.session_data.keys()) if st.session_state.session_data else [],
                     "chat_history_length": len(st.session_state.chat_history)
-                })
+                }
+                st.json(debug_info)
     
     def render_main_content(self) -> None:
         """Render the main application content."""
@@ -255,11 +269,13 @@ class AvatarApp:
         
         with col2:
             # Chat interface
-            chat_interface.render(
-                on_message_send=lambda msg, msg_type: asyncio.run(
-                    self.send_message_to_avatar(msg, msg_type)
-                )
-            )
+            # FIXED: Properly handle async message sending
+            def handle_message_send(msg: str, msg_type: str):
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(self.send_message_to_avatar(msg, msg_type))
+            
+            chat_interface.render(on_message_send=handle_message_send)
         
         # Error handling
         if st.session_state.error_message:
@@ -280,11 +296,13 @@ class AvatarApp:
             
             # Cleanup expired sessions periodically
             if st.session_state.session_active:
-                asyncio.run(session_manager.cleanup_expired_sessions())
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(session_manager.cleanup_expired_sessions())
                 
         except Exception as e:
             st.error(f"Application error: {str(e)}")
-            logger.error("Application error", error=str(e))
+            logger.error("Application error", error=str(e), exc_info=True)
 
 def main():
     """Application entry point."""
