@@ -1,4 +1,4 @@
-"""HeyGen API client with authentication and session management - FIXED."""
+"""HeyGen API client with authentication and session management - WITH DEBUG LOGGING."""
 
 import asyncio
 import time
@@ -69,31 +69,21 @@ class HeyGenClient:
         if not self.session_token:
             await self.generate_session_token()
         
-        # FIXED: Use valid HeyGen voice ID
-        # Common HeyGen voice IDs include:
-        # - "Kristin - Natural" 
-        # - "Paul - Natural"
-        # - "Monica - Friendly"
-        # - Or use the avatar's default voice by not specifying voice_id
-        
+        # FIXED: Updated payload structure
         payload = {
             "version": "v2",
             "avatar_id": settings.avatar_id,
             "quality": quality,
-            "voice": {
-                "voice_id": settings.voice_id if hasattr(settings, 'voice_id') else None,
-                # If no voice_id specified, HeyGen will use the avatar's default voice
-            }
         }
         
-        # Only add voice settings if we have a valid voice_id
-        if payload["voice"]["voice_id"]:
-            payload["voice"]["rate"] = settings.speaking_rate
-            payload["voice"]["emotion"] = settings.voice_emotion
-        else:
-            # Remove voice field entirely to use avatar's default voice
-            payload.pop("voice", None)
-            
+        # Add voice configuration if specified
+        if hasattr(settings, 'voice_id') and settings.voice_id:
+            payload["voice"] = {
+                "voice_id": settings.voice_id,
+                "rate": settings.speaking_rate,
+                "emotion": settings.voice_emotion
+            }
+        
         # Add knowledge base if specified
         if hasattr(settings, 'knowledge_base_id') and settings.knowledge_base_id:
             payload["knowledge_id"] = settings.knowledge_base_id
@@ -113,7 +103,6 @@ class HeyGenClient:
                 error_data = response.json()
                 logger.error("Session creation failed", status_code=400, error_data=error_data)
                 
-                # Provide helpful error messages
                 if "voice_not_found" in str(error_data).lower():
                     raise HeyGenAPIError(
                         "Voice ID not found. Please check your voice_id in settings or remove it to use the avatar's default voice.", 
@@ -134,13 +123,19 @@ class HeyGenClient:
         response.raise_for_status()
         data = response.json()
         
+        # DEBUG: Log the full response to understand structure
+        logger.info("Create session raw response", response_data=data)
+        
         # Handle nested response structure if needed
         if "data" in data:
             session_data = data["data"]
         else:
             session_data = data
         
-        self.session_id = session_data["session_id"]
+        self.session_id = session_data.get("session_id")
+        
+        # DEBUG: Log all keys to see what's available
+        logger.info("Session data keys", keys=list(session_data.keys()) if session_data else [])
         
         logger.info("Streaming session created", session_id=self.session_id)
         metrics.increment("sessions_created")
@@ -164,11 +159,22 @@ class HeyGenClient:
         
         data = response.json()
         
-        # Handle nested response structure if needed
-        if "data" in data:
+        # DEBUG: Log the full response to understand structure
+        logger.info("Start session raw response", response_data=data)
+        
+        # Handle nested response structure
+        if "data" in data and isinstance(data["data"], dict):
             start_data = data["data"]
         else:
-            start_data = data
+            start_data = data if isinstance(data, dict) else {}
+        
+        # Ensure we always return a dictionary
+        if not start_data:
+            logger.warning("Start session returned empty data")
+            start_data = {"session_id": self.session_id, "status": "started"}
+        
+        # DEBUG: Log what we're returning
+        logger.info("Returning start data", start_data=start_data)
             
         self.session_active = True
         
